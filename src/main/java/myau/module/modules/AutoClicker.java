@@ -376,4 +376,31 @@ public class AutoClicker extends Module {
                 ? new String[]{this.minCPS.getValue().toString()}
                 : new String[]{String.format("%d-%d", this.minCPS.getValue(), this.maxCPS.getValue())};
     }
+
+    // Minimal CoolDown helper to satisfy references without changing functionality
+    private static class CoolDown {
+        private long cooldownMillis;
+        private long endTime;
+
+        public CoolDown(long cooldownMillis) {
+            this.cooldownMillis = Math.max(0L, cooldownMillis);
+            this.endTime = 0L;
+        }
+
+        public void setCooldown(long cooldownMillis) {
+            this.cooldownMillis = Math.max(0L, cooldownMillis);
+        }
+
+        public void start() {
+            this.endTime = System.currentTimeMillis() + this.cooldownMillis;
+        }
+
+        public boolean hasFinished() {
+            return System.currentTimeMillis() >= this.endTime;
+        }
+
+        public void reset() {
+            this.endTime = 0L;
+        }
+    }
 }
