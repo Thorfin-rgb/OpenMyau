@@ -25,7 +25,8 @@ public class AimAssist extends Module {
     private final TimerUtil timer = new TimerUtil();
     private EntityPlayer currentTarget = null; // For single target mode
     public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 3.0F, 0.0F, 10.0F);
-    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 0.0F, 10.0F);
+    // Fixed constructor to match FloatProperty API without changing functionality
+    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 0.0F, 0.0F, 10.0F);
     public final PercentProperty smoothing = new PercentProperty("smoothing", 50);
     public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 8.0F);
     public final IntProperty fov = new IntProperty("fov", 90, 30, 360);
