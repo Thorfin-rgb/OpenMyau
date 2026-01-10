@@ -23,8 +23,9 @@ import java.util.stream.Collectors;
 public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final TimerUtil timer = new TimerUtil();
+    private EntityPlayer currentTarget = null; // For single target mode
     public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 3.0F, 0.0F, 10.0F);
-    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 0.0F, 0.0F, 10.0F);
+    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 0.0F, 10.0F);
     public final PercentProperty smoothing = new PercentProperty("smoothing", 50);
     public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 8.0F);
     public final IntProperty fov = new IntProperty("fov", 90, 30, 360);
@@ -32,6 +33,11 @@ public class AimAssist extends Module {
     public final BooleanProperty allowTools = new BooleanProperty("allow-tools", false, this.weaponOnly::getValue);
     public final BooleanProperty botChecks = new BooleanProperty("bot-check", true);
     public final BooleanProperty team = new BooleanProperty("teams", true);
+    // New features
+    public final BooleanProperty singleTarget = new BooleanProperty("single-target", true); // Stick to one target once engaged
+    public final BooleanProperty adaptiveSpeed = new BooleanProperty("adaptive-speed", false); // Adjust speed based on distance
+    public final FloatProperty adaptiveMultiplier = new FloatProperty("adaptive-multiplier", 1.5F, 0.5F, 3.0F, this.adaptiveSpeed::getValue); // Speed multiplier for close targets
+    public final FloatProperty closeRangeThreshold = new FloatProperty("close-range-threshold", 2.0F, 1.0F, 5.0F, this.adaptiveSpeed::getValue); // Distance for adaptive speed
 
     private boolean isValidTarget(EntityPlayer entityPlayer) {
         if (entityPlayer != mc.thePlayer && entityPlayer != mc.thePlayer.ridingEntity) {
@@ -65,6 +71,31 @@ public class AimAssist extends Module {
         return mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectType.BLOCK;
     }
 
+    private EntityPlayer getBestTarget(List<EntityPlayer> targets) {
+        if (this.singleTarget.getValue() && this.currentTarget != null && this.isValidTarget(this.currentTarget)) {
+            return this.currentTarget; // Stick to current target if valid
+        }
+        // Otherwise, find the best target
+        EntityPlayer best = targets.stream()
+                .filter(this::isValidTarget)
+                .min(Comparator.comparingDouble(RotationUtil::distanceToEntity))
+                .orElse(null);
+        if (best != null) {
+            this.currentTarget = best; // Update current target
+        }
+        return best;
+    }
+
+    private float getAdaptiveSpeed(float baseSpeed, EntityPlayer target) {
+        if (this.adaptiveSpeed.getValue() && target != null) {
+            double distance = RotationUtil.distanceToEntity(target);
+            if (distance <= this.closeRangeThreshold.getValue()) {
+                return baseSpeed * this.adaptiveMultiplier.getValue();
+            }
+        }
+        return baseSpeed;
+    }
+
     public AimAssist() {
         super("AimAssist", false);
     }
@@ -84,14 +115,13 @@ public class AimAssist extends Module {
                                 .filter(entity -> entity instanceof EntityPlayer)
                                 .map(entity -> (EntityPlayer) entity)
                                 .filter(this::isValidTarget)
-                                .sorted(Comparator.comparingDouble(RotationUtil::distanceToEntity))
                                 .collect(Collectors.toList());
                         if (!inRange.isEmpty()) {
                             if (inRange.stream().anyMatch(this::isInReach)) {
                                 inRange.removeIf(entityPlayer -> !this.isInReach(entityPlayer));
                             }
-                            EntityPlayer player = inRange.get(0);
-                            if (!(RotationUtil.distanceToEntity(player) <= 0.0)) {
+                            EntityPlayer player = this.getBestTarget(inRange);
+                            if (player != null && !(RotationUtil.distanceToEntity(player) <= 0.0)) {
                                 AxisAlignedBB axisAlignedBB = player.getEntityBoundingBox();
                                 double collisionBorderSize = player.getCollisionBorderSize();
                                 float[] rotation = RotationUtil.getRotationsToBox(
@@ -101,8 +131,8 @@ public class AimAssist extends Module {
                                         180.0F,
                                         (float) this.smoothing.getValue() / 100.0F
                                 );
-                                float yaw = Math.min(Math.abs(this.hSpeed.getValue()), 10.0F);
-                                float pitch = Math.min(Math.abs(this.vSpeed.getValue()), 10.0F);
+                                float yaw = Math.min(Math.abs(this.getAdaptiveSpeed(this.hSpeed.getValue(), player)), 10.0F);
+                                float pitch = Math.min(Math.abs(this.getAdaptiveSpeed(this.vSpeed.getValue(), player)), 10.0F);
                                 Myau.rotationManager
                                         .setRotation(
                                                 mc.thePlayer.rotationYaw + (rotation[0] - mc.thePlayer.rotationYaw) * 0.1F * yaw,
@@ -111,6 +141,8 @@ public class AimAssist extends Module {
                                                 false
                                         );
                             }
+                        } else {
+                            this.currentTarget = null; // Reset if no valid targets
                         }
                     }
                 }
@@ -123,5 +155,10 @@ public class AimAssist extends Module {
         if (event.getKey() == mc.gameSettings.keyBindAttack.getKeyCode() && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             this.timer.reset();
         }
+    }
+
+    @Override
+    public void onDisabled() {
+        this.currentTarget = null; // Reset target on disable
     }
 }
