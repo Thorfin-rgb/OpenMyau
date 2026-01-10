@@ -17,9 +17,9 @@ import net.minecraft.item.ItemShears;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.MovingObjectPosition;
 
-public class AutoTool
-extends Module {
-    private static final Minecraft mc = Minecraft.func_71410_x();
+public class AutoTool extends Module {
+    // Use deobfuscated accessor consistent with other modules
+    private static final Minecraft mc = Minecraft.getMinecraft();
     private int currentToolSlot = -1;
     private int previousSlot = -1;
     private int tickDelayCounter = 0;
@@ -32,7 +32,7 @@ extends Module {
     }
 
     public boolean isKillAura() {
-        KillAura killAura = (KillAura)Myau.moduleManager.modules.get(KillAura.class);
+        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
         if (!killAura.isEnabled()) {
             return false;
         }
@@ -41,8 +41,8 @@ extends Module {
 
     private int findShearsSlot() {
         for (int i = 0; i < 9; ++i) {
-            ItemStack stack = AutoTool.mc.field_71439_g.field_71071_by.func_70301_a(i);
-            if (stack == null || !(stack.func_77973_b() instanceof ItemShears)) continue;
+            ItemStack stack = AutoTool.mc.thePlayer.inventory.getStackInSlot(i);
+            if (stack == null || !(stack.getItem() instanceof ItemShears)) continue;
             return i;
         }
         return -1;
@@ -51,18 +51,31 @@ extends Module {
     @EventTarget
     public void onTick(TickEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
-            if (this.currentToolSlot != -1 && this.currentToolSlot != AutoTool.mc.field_71439_g.field_71071_by.field_70461_c) {
+            // reset if current slot changed externally
+            if (this.currentToolSlot != -1 && this.currentToolSlot != AutoTool.mc.thePlayer.inventory.currentItem) {
                 this.currentToolSlot = -1;
                 this.previousSlot = -1;
             }
-            if (AutoTool.mc.field_71476_x != null && AutoTool.mc.field_71476_x.field_72313_a == MovingObjectPosition.MovingObjectType.BLOCK && AutoTool.mc.field_71474_y.field_74312_F.func_151470_d() && !AutoTool.mc.field_71439_g.func_71039_bw() && !this.isKillAura()) {
-                if (AutoTool.mc.field_71441_e.func_180495_p(AutoTool.mc.field_71476_x.func_178782_a()).func_177230_c() == Blocks.field_150325_L) {
+
+            // Check objectMouseOver and relevant conditions using deobfuscated fields/methods
+            if (AutoTool.mc.objectMouseOver != null
+                    && AutoTool.mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
+                    && AutoTool.mc.gameSettings.keyBindAttack.isKeyDown()
+                    && !AutoTool.mc.thePlayer.isUsingItem()
+                    && !this.isKillAura()) {
+
+                // Compare block at targeted position to leaves (field_150325_L -> leaves)
+                if (AutoTool.mc.theWorld.getBlockState(AutoTool.mc.objectMouseOver.getBlockPos()).getBlock() == Blocks.leaves) {
                     int slot;
-                    if (this.tickDelayCounter >= (Integer)this.switchDelay.getValue() && (!((Boolean)this.sneakOnly.getValue()).booleanValue() || KeyBindUtil.isKeyDown(AutoTool.mc.field_71474_y.field_74311_E.func_151463_i())) && (slot = this.findShearsSlot()) != -1 && AutoTool.mc.field_71439_g.field_71071_by.field_70461_c != slot) {
+                    if (this.tickDelayCounter >= (Integer)this.switchDelay.getValue()
+                            && (!((Boolean)this.sneakOnly.getValue()).booleanValue() || KeyBindUtil.isKeyDown(AutoTool.mc.gameSettings.keyBindSneak.getKeyCode()))
+                            && (slot = this.findShearsSlot()) != -1
+                            && AutoTool.mc.thePlayer.inventory.currentItem != slot) {
+
                         if (this.previousSlot == -1) {
-                            this.previousSlot = AutoTool.mc.field_71439_g.field_71071_by.field_70461_c;
+                            this.previousSlot = AutoTool.mc.thePlayer.inventory.currentItem;
                         }
-                        AutoTool.mc.field_71439_g.field_71071_by.field_70461_c = this.currentToolSlot = slot;
+                        AutoTool.mc.thePlayer.inventory.currentItem = this.currentToolSlot = slot;
                     }
                     ++this.tickDelayCounter;
                 } else {
@@ -70,7 +83,7 @@ extends Module {
                 }
             } else {
                 if (((Boolean)this.switchBack.getValue()).booleanValue() && this.previousSlot != -1) {
-                    AutoTool.mc.field_71439_g.field_71071_by.field_70461_c = this.previousSlot;
+                    AutoTool.mc.thePlayer.inventory.currentItem = this.previousSlot;
                 }
                 this.currentToolSlot = -1;
                 this.previousSlot = -1;
