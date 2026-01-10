@@ -7,7 +7,9 @@ import myau.event.types.Priority;
 import myau.events.PacketEvent;
 import myau.events.UpdateEvent;
 import myau.module.Module;
+import myau.property.properties.BooleanProperty;
 import myau.property.properties.ModeProperty;
+import myau.property.properties.IntProperty;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -20,6 +22,10 @@ public class HitSelect extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"SECOND", "CRITICALS", "W_TAP"});
+    // New properties for enhancements
+    public final BooleanProperty showStats = new BooleanProperty("show-stats", false); // Display blocked/allowed hits in suffix
+    public final IntProperty maxBlockedHits = new IntProperty("max-blocked-hits", 10, 1, 50); // Limit consecutive blocks to prevent detection
+    public final BooleanProperty adaptiveMode = new BooleanProperty("adaptive-mode", true); // Dynamically adjust based on player health or distance
     
     private boolean sprintState = false;
     private boolean set = false;
@@ -27,6 +33,7 @@ public class HitSelect extends Module {
     
     private int blockedHits = 0;
     private int allowedHits = 0;
+    private int consecutiveBlocks = 0; // Track consecutive blocks
 
     public HitSelect() {
         super("HitSelect", false);
@@ -81,6 +88,17 @@ public class HitSelect extends Module {
             EntityLivingBase living = (EntityLivingBase) target;
             boolean allow = true;
 
+            // Adaptive adjustments
+            if (this.adaptiveMode.getValue()) {
+                if (mc.thePlayer.getHealth() < 10.0F) {
+                    // Be more aggressive when low health
+                    allow = true;
+                } else if (mc.thePlayer.getDistanceToEntity(living) > 5.0) {
+                    // Allow more at distance
+                    allow = true;
+                }
+            }
+
             switch (this.mode.getValue()) {
                 case 0: // SECOND
                     allow = this.prioritizeSecondHit(mc.thePlayer, living);
@@ -93,11 +111,18 @@ public class HitSelect extends Module {
                     break;
             }
 
+            // Limit consecutive blocks
+            if (!allow && this.consecutiveBlocks >= this.maxBlockedHits.getValue()) {
+                allow = true; // Force allow to prevent pattern
+            }
+
             if (!allow) {
                 event.setCancelled(true);
                 this.blockedHits++;
+                this.consecutiveBlocks++;
             } else {
                 this.allowedHits++;
+                this.consecutiveBlocks = 0; // Reset on allow
             }
         }
     }
@@ -275,10 +300,14 @@ public class HitSelect extends Module {
         this.savedSlowdown = 0.0;
         this.blockedHits = 0;
         this.allowedHits = 0;
+        this.consecutiveBlocks = 0;
     }
 
     @Override
     public String[] getSuffix() {
+        if (this.showStats.getValue()) {
+            return new String[]{this.mode.getModeString(), "B:" + this.blockedHits, "A:" + this.allowedHits};
+        }
         return new String[]{this.mode.getModeString()};
     }
 }
